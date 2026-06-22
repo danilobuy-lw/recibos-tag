@@ -161,19 +161,48 @@ def fmt_date_pagamento(value) -> str:
 
 
 def fmt_money(value) -> str:
-    """Sempre 'R$ XX,XX' — vírgula decimal, ponto de milhar."""
+    """Sempre 'R$ XX,XX' — vírgula decimal, ponto de milhar.
+
+    Aceita:
+      - números Python (int/float): 9.1, 1234.56
+      - strings BR: "R$ 9,10", "9,10", "1.234,56"
+      - strings EN: "9.10", "1234.56"
+    """
     if value is None or value == "":
         return "R$ 0,00"
-    s = str(value).replace("\xa0", " ").strip()
-    cleaned = s.replace("R$", "").strip().replace(".", "").replace(",", ".")
-    try:
-        n = float(cleaned)
-        int_part, dec_part = f"{n:.2f}".split(".")
-        rev = int_part[::-1]
-        grouped = ".".join(rev[i:i+3] for i in range(0, len(rev), 3))[::-1]
-        return f"R$ {grouped},{dec_part}"
-    except ValueError:
-        return s if s.startswith("R$") else f"R$ {s}"
+
+    # 1) Se já é número Python, formata direto
+    if isinstance(value, (int, float)):
+        n = float(value)
+    else:
+        # 2) String: precisa detectar o formato
+        s = str(value).replace("\xa0", " ").strip()
+        cleaned = s.replace("R$", "").strip()
+        if not cleaned:
+            return "R$ 0,00"
+
+        has_dot = "." in cleaned
+        has_comma = "," in cleaned
+
+        if has_dot and has_comma:
+            # Formato BR clássico: 1.234,56 -> ponto é milhar, vírgula é decimal
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        elif has_comma:
+            # Só vírgula: decimal BR -> 9,10
+            cleaned = cleaned.replace(",", ".")
+        # else: só ponto (ou nada) — já está como decimal EN
+
+        try:
+            n = float(cleaned)
+        except ValueError:
+            # Não conseguiu parsear: devolve string original prefixada com R$
+            return s if s.startswith("R$") else f"R$ {s}"
+
+    # Formata em BR: ponto de milhar, vírgula decimal
+    int_part, dec_part = f"{n:.2f}".split(".")
+    rev = int_part[::-1]
+    grouped = ".".join(rev[i:i+3] for i in range(0, len(rev), 3))[::-1]
+    return f"R$ {grouped},{dec_part}"
 
 
 def safe_filename(s) -> str:
